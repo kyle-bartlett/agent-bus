@@ -1,0 +1,24 @@
+name = "agent-bus"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+preview_urls = false
+
+# bus.bartlettlabs.io is a proxied AAAA 100:: placeholder in the zone; this
+# route is what actually serves it. The workers.dev URL stays live as a fallback.
+routes = [
+  { pattern = "bus.bartlettlabs.io/*", zone_name = "bartlettlabs.io" }
+]
+
+[vars]
+SERVICE_VERSION = "0.1.0"
+
+# ADMIN_TOKEN is a secret, not a var: `wrangler secret put ADMIN_TOKEN`.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agent-bus"
+database_id = "8eb4bfbe-fecb-473c-814b-fd5f8feed2f7"
+
+[observability]
+enabled = true
