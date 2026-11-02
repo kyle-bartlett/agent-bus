@@ -114,3 +114,37 @@ describe("MCP streamable HTTP", () => {
     bus.close();
   });
 });
+
+describe("token in the URL path", () => {
+  test("/mcp/<token> authenticates the same identity as the header", async () => {
+    const bus = makeBus();
+    const token = await bus.mint("grok-main", { kind: "grok" });
+    await bus.mint("cos", { kind: "claude" });
+
+    const call = (path: string, body: unknown, headerToken?: string) =>
+      bus.call(path, { method: "POST", token: headerToken, body: JSON.stringify(body) });
+
+    const sent = (await (
+      await call(`/mcp/${token}`, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "send", arguments: { to: "cos", body: "from the path-auth route" } },
+      })
+    ).json()) as { result: { structuredContent: { delivered_to: string[] } } };
+    expect(sent.result.structuredContent.delivered_to).toEqual(["cos"]);
+
+    const row = bus.db.query(`SELECT from_agent FROM messages`).get() as { from_agent: string };
+    expect(row.from_agent).toBe("grok-main");
+
+    const bad = await call("/mcp/ab_not-a-real-token", { jsonrpc: "2.0", id: 2, method: "ping" });
+    expect(bad.status).toBe(401);
+
+    // A header still wins when both are present, so nothing changes for existing clients.
+    const headerWins = (await (
+      await call(`/mcp/${token}`, { jsonrpc: "2.0", id: 3, method: "initialize", params: {} }, token)
+    ).json()) as { result: { instructions: string } };
+    expect(headerWins.result.instructions).toContain("'grok-main'");
+    bus.close();
+  });
+});

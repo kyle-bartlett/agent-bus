@@ -44,7 +44,12 @@ export default {
         );
       }
 
-      if (url.pathname === "/mcp") {
+      // /mcp/<token> is the same endpoint with the bearer in the path, for
+      // connector UIs that accept a URL but no custom header. The token is
+      // still the identity; it just arrives somewhere less private, so prefer
+      // the header wherever the client allows one.
+      const mcp = /^\/mcp(?:\/([^/]+))?$/.exec(url.pathname);
+      if (mcp) {
         if (req.method === "DELETE") return withHeaders(new Response(null, { status: 204 }));
         if (req.method !== "POST") {
           // No server-initiated stream: clients must POST their JSON-RPC.
@@ -52,7 +57,8 @@ export default {
             Response.json({ error: "method_not_allowed", message: "POST JSON-RPC to /mcp" }, { status: 405 }),
           );
         }
-        const caller = await authenticate(env, req);
+        const pathToken = mcp[1] ? decodeURIComponent(mcp[1]) : undefined;
+        const caller = await authenticate(env, req, pathToken);
         await enforceRateLimit(env, caller.name);
         return withHeaders(await handleMcp(req, env, ctx, caller));
       }

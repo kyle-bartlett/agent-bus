@@ -21,9 +21,13 @@ export function bearerToken(req: Request): string | null {
 /**
  * Resolves the caller from its bearer token alone. The token *is* the identity:
  * nothing a client sends in a body or query can change who it is.
+ *
+ * `explicitToken` carries the token when it arrived in the URL path
+ * (/mcp/<token>) rather than the Authorization header, for connector UIs that
+ * only take a URL.
  */
-export async function authenticate(env: Env, req: Request): Promise<Agent> {
-  const token = bearerToken(req);
+export async function authenticate(env: Env, req: Request, explicitToken?: string): Promise<Agent> {
+  const token = explicitToken ?? bearerToken(req);
   if (!token) throw new BusError(401, "missing_token", "Authorization: Bearer <token> required");
 
   const row = await env.DB.prepare(
