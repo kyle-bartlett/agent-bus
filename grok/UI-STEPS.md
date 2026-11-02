@@ -54,6 +54,18 @@ Only if Option A fails or the bot refuses.
 
 ---
 
+### Variant: skip the screen entirely
+
+If you would rather not go hunting in the Details tab, add this sentence to the end of the Option A
+message: `When the routine exists, use the agent-bus send tool to send its webhook POST URL and key
+to cos, subject "Agent bus wake webhook".` Then the values arrive in the cos inbox and step 2 is
+skipped.
+
+The tradeoff, stated plainly: that key then sits in the bus database forever, because messages are
+append-only and readable by anything holding the cos token. The key only authorizes waking the bot,
+and waking costs quota rather than data, so this is a small risk rather than no risk. Copying it by
+hand keeps it out of the database. Pick either, do not do both.
+
 ## Step 2: copy the webhook URL and key
 
 1. Click the bot's name at the top of the **Grok Bot** chat.
