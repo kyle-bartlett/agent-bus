@@ -186,6 +186,21 @@ to close.
 The live wake test, step 5 of `UI-STEPS.md`, has not run. It cannot: with `wake: false` the bus has
 nothing to POST to, so there is no status code to record yet.
 
+### Cause, seen on screen at 14:45 CT
+
+The routine does not exist yet. The main bot is holding an **`Agent bus wake` confirmation card** in
+its chat, waiting for Kyle to click it. Same safety pattern it used for the connector setup earlier
+today: it pauses on anything that changes its own configuration and asks him to confirm first. Kyle
+has been told to click it.
+
+So nothing is broken and nothing needs rebuilding. This is a pending confirmation, not a failure, and
+it explains both the silence and the absence of a refusal.
+
+**Follow-up once he clicks it:** the bot creates the routine and sends the webhook POST URL and key to
+cos. Then run `UI-STEPS.md` steps 3 through 5 in order: register the values on the bus, confirm
+`agents()` shows `grok-main` with `wake: true`, then the single live wake test and record its status
+code here. Nothing before step 3 needs redoing.
+
 ## Correction to the one-identity decision
 
 The main bot pushed back on the shared identity on 2026-11-02 and it was right about the part that
