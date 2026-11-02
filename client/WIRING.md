@@ -10,10 +10,10 @@ claude mcp add --scope user --transport http agent-bus https://bus.bartlettlabs.
   --header "Authorization: Bearer $(security find-generic-password -s agent-bus -a claude -w)"
 ```
 
-| Machine | `claude mcp get agent-bus` |
-|---|---|
-| Laptop | Scope: User config (available in all your projects). Status: Connected. |
-| iMac | Scope: User config (available in all your projects). Status: Connected. |
+| Machine | `claude mcp get agent-bus`                                              |
+| ------- | ----------------------------------------------------------------------- |
+| Laptop  | Scope: User config (available in all your projects). Status: Connected. |
+| iMac    | Scope: User config (available in all your projects). Status: Connected. |
 
 A stale **local**-scope `agent-bus` entry in `~/wildcard/agent-bus` from the earlier bus-build
 session was removed (`claude mcp remove agent-bus -s local`) so the user-scope entry is the
@@ -60,12 +60,12 @@ plist is the approach that actually works, same principle Section 2 used.
 
 `grok-main` had already sent a real, unprompted question to `cos` before this poller existed:
 
-| | |
-|---|---|
-| Message | `msg_lxlB9XgLGKR6alQi` |
-| Thread | `thr_A2eeNJxNbzxUJJFR` |
-| Subject | "KDP prod Turso: read-only schema check before next deploy" |
-| From | `grok-main`, on behalf of The Coder bot, which is holding a production deploy on `kdp-book-app` until this is answered |
+|         |                                                                                                                        |
+| ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Message | `msg_lxlB9XgLGKR6alQi`                                                                                                 |
+| Thread  | `thr_A2eeNJxNbzxUJJFR`                                                                                                 |
+| Subject | "KDP prod Turso: read-only schema check before next deploy"                                                            |
+| From    | `grok-main`, on behalf of The Coder bot, which is holding a production deploy on `kdp-book-app` until this is answered |
 
 The poller's first real run (not a manual trigger after the first attempt was blocked by the
 403 above) picked it up and queued:
@@ -98,13 +98,65 @@ subscription could not be verified"`. Traced it:
 - `~/.claude/.credentials.json` on the iMac has `expiresAt: 0` (access token expired); the
   refresh token itself isn't expired until 2026-11-14.
 
-This means the iMac's Claude Code login needs a real re-auth (`claude /login` from an actual
-interactive session), and until that happens **no** `cos task chief-of-staff-route` on the
-iMac will execute, including the one answering grok-main's production-deploy question. This
-is a pre-existing chief-of-staff/Claude-session issue, not something in `agent-bus`'s scope to
-fix, and not something safe to try to patch headlessly (no bare `claude -p`, and OAuth login
-needs a browser). Flagging it because it is currently the thing actually blocking the KDP
-deploy decision, not the bus or the poller.
+This means the iMac's Claude Code login needed a real re-auth, and until that happened **no**
+`cos task chief-of-staff-route` on the iMac would execute, including the one answering
+grok-main's production-deploy question. Not a bus or poller problem; a separate
+chief-of-staff/Claude-session issue that happened to be blocking the KDP deploy decision at the
+same time. Fixed, see Section 8.
+
+## 8. The login fix, and the task answering grok-main's question
+
+Ruled out the keychain-over-ssh explanation first: re-ran `claude auth status --json` through
+the same working throwaway-launchd pattern, this time with the exact env the chief-of-staff
+wrappers use (`USER` restored via `/usr/bin/id -un`, `ANTHROPIC_CONFIG_DIR=/var/empty`, the
+ambient API/auth vars stripped, per `PAI/TOOLS/Inference.ts subscriptionEnv()` and
+`[[headless-claude-billing-trap]]`). Still `loggedIn: false`. `cos-task-runner.log` had no
+mention of the subscription error at all (that failure is caught and written straight to the
+tasks DB, never to stdout); the "database is locked" / "Cannot find package zod" lines in that
+log are old crash-loop noise from a different incident, unrelated and not from today.
+
+Session really was expired: `~/.claude/.credentials.json` showed `expiresAt: 0`, mtime
+2026-11-02T20:02:51Z, about 5 minutes before the first `chief-of-staff-route` failure
+(20:07:59Z). Fixed it with the OAuth login flow Kyle specified, never `claude -p` or an API
+key: a throwaway launchd job ran `claude auth login --claudeai` under a pty (`/usr/bin/script`)
+with stdin wired to a FIFO opened read-write (`exec 3<>fifo`, so the read doesn't block before
+the process starts) so a code could be pasted in if one was needed. It wasn't: the iMac's own
+already-signed-in Chrome completed the OAuth redirect on its own and the job logged "Login
+successful" without any code exchange. Verified immediately after:
+`{"loggedIn":true,"authMethod":"claude.ai","email":"krbartle@gmail.com","subscriptionType":"max"}`.
+Cleaned up right after (unloaded the plist, killed the `script`/`claude auth login` processes,
+removed the FIFO and the scripts) so nothing was left running.
+
+Kyle then signed into everything on the iMac himself around the same time, including Claude
+Code. Re-checked `claude auth status --json` fresh after that (same throwaway-launchd pattern):
+still `loggedIn: true`, same account, same Max subscription. No conflict between the two
+sign-ins.
+
+**The task itself:** the original COS task `d427fc39-c610-47ae-818b-9e1de3314def` was left
+`failed` (chief-of-staff has no requeue-by-id command), so resubmitted the identical question
+as a fresh task once the login was confirmed working: **`2e228792-af63-46aa-afc6-8c0fedc66b2a`**
+(`chief-of-staff-route`, queued 2026-11-02T20:29:45.296Z). A second task queued independently
+around 20:16:45Z (`56915f04-...`, not mine, likely Kyle's own recheck) had failed too, since it
+ran before the 20:28Z fix landed.
+
+**Outcome: `2e228792` succeeded at 2026-11-02T20:37:59Z.** The routing worker delegated it to a
+`scout-builder` worker, which did real work rather than just drafting a reply: found the Turso
+credentials itself, ran read-only queries against the production `kdp-book-app` database (no
+writes), and posted two replies on thread `thr_A2eeNJxNbzxUJJFR`:
+
+1. `msg_u_uNxsnLbgbH7E-b` (20:33:35Z) - first pass: all 5 migrations applied, 155
+   `NicheOpportunity` rows with zero duplicates, full table/row-count inventory. Flagged that it
+   had not diffed against the repo's pending migration SQL.
+2. `msg_l3KTHk-KLM7yRlEi` (20:37:15Z) - a correction after checking out `kyle/kdp-book-app`
+   main (`d757412`): full schema diff (17 models, 220 columns, 0 mismatches), confirmed no
+   migration is recorded-but-unapplied, and a dry run of the dedupe delete affects 0 rows today.
+   Conclusion: **"no reason to keep holding the deploy."** `delivered: false` as of this
+   writing, meaning grok-main/The Coder hasn't polled it yet; that is their side's pull, not
+   something this poller or CLI controls.
+
+Zero human relay end to end: a Grok bot's production question, delegated by the COS to a real
+worker that queried the real database and answered on the bus, with my only part being wiring
+the bus/poller and fixing the login that had briefly stopped it from running at all.
 
 ## 6. CLI: `client/bus.ts` + `client/bus`
 
@@ -138,3 +190,25 @@ $ bus whoami --as cos # iMac, via a throwaway launchd job (plain ssh can't reach
 Appended an "Agent bus (Grok <-> Claude)" section to `~/.claude/CLAUDE.md` on both the laptop
 and the iMac: what the bus is, the identities, when to use `ask_and_wait`/`send` instead of
 asking Kyle to relay to Grok, and to answer bus messages addressed to you with `reply`.
+
+## 9. Session keep-alive, kicked after confirming the iMac sign-ins
+
+`launchctl kickstart gui/$(id -u)/com.bartlettlabs.session-keepalive` over plain ssh (this one
+doesn't touch the keychain itself, just signals the GUI-domain job, so plain ssh reaches it
+fine). Fresh run at 2026-11-02T20:31:49Z, `~/Library/Application Support/cos/session-status.json`:
+
+```
+2026-11-02 14:31:49 ok: Shopify admin
+2026-11-02 14:31:49 ok: LinkedIn
+2026-11-02 14:31:49 ok: Google
+2026-11-02 14:31:49 signed out: Stripe (https://dashboard.stripe.com/login)
+2026-11-02 14:31:49 signed out: Coolify (https://empty-fog-5c7c.cloudflareaccess.com/cdn-cgi/access/login/coolify...)
+2026-11-02 14:31:49 ok: Vercel
+2026-11-02 14:31:49 ok: Gmail (gog)
+2026-11-02 14:31:50 ok: iCloud mail (himalaya)
+2026-11-02 14:31:50 ok: Codex
+2026-11-02 14:31:50 done: 2 problem(s)
+```
+
+**Still signed out, not fixed here (reporting only, per instruction):** Stripe
+(dashboard.stripe.com) and Coolify (via its Cloudflare Access login) in the iMac's Chrome.
