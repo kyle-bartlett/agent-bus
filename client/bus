@@ -1,0 +1,14 @@
+#!/bin/bash
+# bus: agent-bus CLI wrapper. Finds bun the same way ~/.local/bin/cos does: shell PATH first,
+# then the bundled runtime, then the user's own bun install.
+set -e
+RESOLVED="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$RESOLVED")" && pwd)"
+BUN_BIN="${BUN_BIN:-}"
+if [ -z "$BUN_BIN" ]; then
+  for candidate in "$(which bun 2>/dev/null || true)" "$HOME/.local/share/barts-runtime/bun" "$HOME/.bun/bin/bun"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then BUN_BIN="$candidate"; break; fi
+  done
+fi
+[ -n "$BUN_BIN" ] || { echo "bus: no bun found (shell PATH, ~/.local/share/barts-runtime/bun, ~/.bun/bin/bun)" >&2; exit 1; }
+exec "$BUN_BIN" "$SCRIPT_DIR/bus.ts" "$@"
