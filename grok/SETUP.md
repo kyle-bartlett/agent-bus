@@ -152,14 +152,61 @@ the outbound posts that failed in October.
 
 None. Nothing here needs his password or a 2FA code.
 
-## The one open item
+## The one open item: still no wake
 
-**The main bot has no wake.** Its own words: nothing wakes it, so replies only show up when it reads
-its inbox. Until the routine exists, the bus is pull-based on the Grok side, which works but is not
-instant.
+**`grok-main` reads `wake: false` on the bus.** Nothing wakes the main bot, so a message sits in its
+inbox until the bot happens to run and read it. The bus works in both directions either way; it is
+just not instant on the Grok side.
 
 The fix is a webhook-triggered routine named `Agent bus wake` on the main bot, with its POST URL and
-key registered as `grok-main`'s wake webhook. `UI-STEPS.md` has the exact steps, and the first option
-is three lines of chat text, because x.ai documents that a bot creates its own routine when asked in
-chat. The webhook URL and key still have to be read out of the bot's Details tab afterwards, which is
-the part that needs a screen.
+key registered as `grok-main`'s wake webhook. `UI-STEPS.md` has the steps, chat-first, because x.ai
+documents that a bot creates its own routine when asked in chat.
+
+### What was tried, 2026-11-02
+
+At 14:21 CT the supervisor asked the main bot in chat to create the routine and to send its webhook
+POST URL and key to cos on the bus, using the zero-screen variant in `UI-STEPS.md`. I then polled the
+cos inbox over REST once a minute for 20 minutes.
+
+**The values never arrived, and the bot never said it could not create the routine.** It was plainly
+awake and working the bus the whole time: three unrelated messages came in during those 20 minutes.
+
+| Message | Time (UTC) | What it was |
+|---|---|---|
+| `msg_DnIOykfwMUb1tO40` | 20:33:58Z | Prospecting bot asking where to route LinkedIn lead handoffs. Answered by another cos session as `msg_FHuu-5qZdfqKZ-CO`. |
+| `msg_lXYKDGv6R648bxcc` | 20:43:59Z | A request for one bus identity per Grok department, see below. |
+| `msg_5rTEUBHHCdKTqeDm` | 20:44:31Z | Six Coolify env vars wanted for kdp-book-app before the PR 15 deploy. Left for the COS pipeline. |
+
+So the gap is not reachability and not a refusal. The routine either does not exist or exists without
+the values being sent. I asked for exactly that, over the bus, in `msg_MAtsLpjz3Fi0hwuS`: whether the
+routine exists and is enabled, and either its URL and key or the exact reason it could not be made.
+The reply will land whenever the bot next reads its inbox, which is the same gap the routine is meant
+to close.
+
+The live wake test, step 5 of `UI-STEPS.md`, has not run. It cannot: with `wake: false` the bus has
+nothing to POST to, so there is no status code to record yet.
+
+## Correction to the one-identity decision
+
+The main bot pushed back on the shared identity on 2026-11-02 and it was right about the part that
+matters. Its report: because every Grok bot shares `grok-main`, whichever bot opens the inbox marks
+everything delivered, so the bot that owns a message may never see it. It says Signal hit this today.
+
+What is actually true, and what I told it in `msg_MAtsLpjz3Fi0hwuS`:
+
+- **The account-wide connector reasoning still holds.** A custom MCP server on this account is shared,
+  so a per-bot token has nowhere to live unless a bot can add a server only it can see.
+- **The routing claim was my mistake.** I treated one identity as free. It is not.
+- **There is a fix available today that costs nothing:** `inbox(unread_only: false, limit: 100)`
+  returns every message in the identity's mail whether or not another bot marked it delivered.
+  Delivered is only a hand-off marker. Acked is the flag that means handled, and only the reading bot
+  sets it. Nothing was lost, including Signal's message.
+- **One question decides whether per-department identities can work:** can a single bot add a custom
+  remote MCP server visible only to itself, or is a custom server always account-wide? If it can, the
+  nine named departments get their own identities and tokens (The Coder, Signal, Prospecting,
+  Pumpville, Publishing, Studio, Products, Scout, Finance), pasted straight into each bot's own
+  connector entry, never through a chat or a file. If it cannot, the main bot stays the single reader
+  and router, which is what it is already doing.
+
+Until that answer comes back, do not mint the nine. Nine tokens with nowhere to live would be nine
+things to rotate for nothing, which is the same mistake in the other direction.

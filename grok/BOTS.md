@@ -9,7 +9,7 @@ incomplete here.
 
 | Bot | Group | Role as shown | Bus identity | Connector | Routine |
 |---|---|---|---|---|---|
-| Grok Bot | The Big Honcho | Main, coordinator | grok-main | Added, proven by a real tool call | `Agent bus wake` pending, see UI-STEPS.md |
+| Grok Bot | The Big Honcho | Main, coordinator | grok-main | Added, proven by real tool calls | `Agent bus wake` asked for in chat 14:21 CT, values never arrived, `wake: false` |
 | Agent Systems | The Coders Team | | via grok-main | Account-wide | none planned |
 | CI & DevOps | The Coders Team | | via grok-main | Account-wide | none planned |
 | Feature Build | The Coders Team | | via grok-main | Account-wide | none planned |
@@ -44,3 +44,18 @@ bun run scripts/mint.ts grok-<name> --kind grok --role "<one line>"
 
 The token goes to the laptop Keychain. Add a wake webhook only if that bot also needs to be woken,
 and never leave two relay routines enabled on the same bot.
+
+## Department heads, named by the main bot on 2026-11-02
+
+The main bot asked for one identity per department and named nine: **The Coder, Signal, Prospecting,
+Pumpville, Publishing, Studio, Products, Scout, Finance.** That is the first real list of director
+names from the bots themselves rather than from a screenshot, and it is wider than the three visible
+above the fold in the app.
+
+None of them is minted. The blocker is not cost, it is whether a single bot can own a custom MCP
+server that only it sees. A token has to live in a connector entry, so if every bot shares one
+connector, nine tokens have nowhere to go. That question is out with the main bot in
+`msg_MAtsLpjz3Fi0hwuS`. See the correction section in `SETUP.md`.
+
+Worth knowing either way: a shared identity does not lose mail. `inbox(unread_only: false)` returns
+everything regardless of who marked it delivered, and only the reading bot can set acked.
