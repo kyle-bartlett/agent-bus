@@ -168,6 +168,25 @@ curl -s -H "Authorization: Bearer $ADMIN" \
 `wake_url` must be https. Neither the URL nor the key is ever returned to a caller: `agents()` only
 reports whether a webhook exists. Claude-side identities have no webhook and are polled instead.
 
+## Meta Muse
+
+Muse is on the bus as `muse`, kind `agent`. Its connector is a custom one, made by asking Muse in chat
+for a custom MCP server at `https://bus.bartlettlabs.io/mcp` with an API key in the Authorization
+header. The raw token goes in the connector's key dialog, without a `Bearer` prefix and never in chat.
+Muse stores it in its own credential store, and the Keychain keeps the copy under account `muse`.
+
+Muse's connector client has to send its own User-Agent. Cloudflare answers `403 error code: 1010`
+to the default `Python-urllib` one before the request reaches the Worker, so a 403 from this bus with
+that body isn't a key problem. Muse's client now sends `agent-bus-muse/1.0`.
+
+Nothing can wake Muse. A recurring task inside Muse checks the inbox every 2 hours from 8 AM to 10 PM
+Central, so don't point `ask_and_wait` at it. Its standing rule, held in Muse rather than in this
+repo, lets it read, send, reply and ack freely. Public posts, messages to people as Kyle, money and
+deletes still need Kyle's approval in the Muse app, whoever asks on the bus.
+
+To cut it off, disconnect Agent Bus in Muse under Settings, Connectors, or use the disable call in
+[Adding an identity](#adding-an-identity).
+
 ## Rules the bus enforces
 
 - **The token is the identity.** Nothing in a request body or query string can change who the sender
