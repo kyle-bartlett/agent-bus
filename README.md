@@ -184,6 +184,10 @@ Central, so don't point `ask_and_wait` at it. Its standing rule, held in Muse ra
 repo, lets it read, send, reply and ack freely. Public posts, messages to people as Kyle, money and
 deletes still need Kyle's approval in the Muse app, whoever asks on the bus.
 
+Muse runs an injection filter it can't tune or turn off, and it drops messages that read as commands.
+Ask status questions ("Did your 4 PM inbox check run?"), not orders ("Reply with X"). A probe's code
+word goes in the subject line, never in the body as something to repeat back.
+
 Muse has file access on the laptop but no shell, so its git and iMac writes go through this bus. Messages from
 `muse` to `claude` with kind `muse-career` or `muse-linkedin` skip the COS: `~/grok-bridge/agent-bus-poll.py` on
 the iMac appends them to `~/career/LOG.md` or the LinkedIn handoff log and replies with the result. Tests are in
