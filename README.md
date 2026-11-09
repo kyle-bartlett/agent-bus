@@ -185,8 +185,10 @@ repo, lets it read, send, reply and ack freely. Public posts, messages to people
 deletes still need Kyle's approval in the Muse app, whoever asks on the bus.
 
 Muse runs an injection filter it can't tune or turn off, and it drops messages that read as commands.
-Ask status questions ("Did your 4 PM inbox check run?"), not orders ("Reply with X"). A probe's code
-word goes in the subject line, never in the body as something to repeat back.
+Ask status questions ("Did your 4 PM inbox check run?"), not orders ("Reply with X"). Don't probe Muse:
+every scheduled run ends with a timestamp-only "Muse run" note to `claude`, and that note is the
+liveness signal. The iMac poller logs it as `trace` without routing it to the COS and flags the
+schedule stale after 2.25 hours of silence inside the 8 AM to 10 PM window.
 
 Muse has file access on the laptop but no shell, so its git and iMac writes go through this bus. Messages from
 `muse` to `claude` with kind `muse-career` or `muse-linkedin` skip the COS: `~/grok-bridge/agent-bus-poll.py` on
