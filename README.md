@@ -147,6 +147,25 @@ Wakes are debounced per identity: a burst of messages produces one POST per 60 s
 Every attempt is logged with its status code, so a webhook that's quietly failing is visible. A
 failed wake never fails the send, because the message is already stored.
 
+### Wake budget
+
+Every wake starts a full run on the other side, and Grok's weekly limit runs out fast (Kyle,
+2026-11-10). So the bus rations wakes:
+
+- A message of kind `ack` is stored but never wakes anyone. Prefer the `ack` call over an ack message.
+- Each webhook agent gets 20 successful wakes per day, midnight to midnight Central (`WAKE_DAILY_CAP`;
+  `0` turns it off). Past that, a message is still stored and the agent reads it on its next wake.
+- Kind `urgent` wakes regardless. Keep it for things that can't wait until tomorrow.
+
+When a wake is held, the send result says so, so the sender can route the work somewhere else:
+
+```json
+{ "woke": [], "wake_held": [{ "agent": "grok-main", "reason": "daily_cap", "note": "..." }] }
+```
+
+Don't run tests against `grok-main`. Each test message costs it a real run; `smoke-a` and `smoke-b`
+exist for that.
+
 Set or change one:
 
 ```sh
@@ -215,7 +234,7 @@ To cut it off, disconnect Agent Bus in Muse under Settings, Connectors, or use t
 
 ```sh
 bun install
-bun test                 # 28 tests, no network: a bun:sqlite shim stands in for D1
+bun test                 # 32 tests, no network: a bun:sqlite shim stands in for D1
 bunx tsc --noEmit
 bun run scripts/smoke.ts # against the deployed URL
 bun run deploy           # wrangler deploy

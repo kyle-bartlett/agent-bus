@@ -2,7 +2,7 @@ import type { Agent } from "./auth";
 import type { D1PreparedStatement, Env, ExecutionContext } from "./d1";
 import { BusError } from "./errors";
 import { newId } from "./ids";
-import { fireWakes, scheduleWakes, type WakeTarget } from "./wake";
+import { fireWakes, scheduleWakes, wakeHolds, type WakeHold, type WakeTarget } from "./wake";
 
 export const MAX_BODY_BYTES = 32 * 1024;
 export const MAX_SUBJECT_BYTES = 512;
@@ -183,6 +183,8 @@ export interface SendResult {
   delivered_to: string[];
   message_ids: string[];
   woke: string[];
+  /** Present only when a webhook target was not woken: the message is stored and waits for its next wake. */
+  wake_held?: WakeHold[];
 }
 
 export async function send(
@@ -248,7 +250,10 @@ export async function send(
     return { message_id: ids[idx]!, thread_id: threadId, from: caller.name, subject };
   };
 
-  const wakeWork = fireWakes(env, targets, payloadFor);
+  const held = await wakeHolds(env, targets, kind);
+  const wakeable = targets.filter((t) => !held.some((h) => h.agent === t.name));
+
+  const wakeWork = fireWakes(env, wakeable, payloadFor);
   if (opts.awaitWakes) await wakeWork;
   else scheduleWakes(ctx, wakeWork);
 
@@ -256,7 +261,8 @@ export async function send(
     thread_id: threadId,
     delivered_to: targets.map((t) => t.name),
     message_ids: ids,
-    woke: targets.filter((t) => t.wake_url).map((t) => t.name),
+    woke: wakeable.filter((t) => t.wake_url).map((t) => t.name),
+    ...(held.length > 0 ? { wake_held: held } : {}),
   };
 }
 

@@ -120,6 +120,81 @@ describe("wake webhooks", () => {
     bus.close();
   });
 
+  test("an ack is stored but never spends a wake", async () => {
+    stub = stubFetch();
+    const bus = makeBus();
+    const a = await bus.mint("a");
+    await bus.mint("grok-main", { kind: "grok", wake_url: "https://hooks.example.com/grok" });
+
+    const sent = (await tool(bus, a, "send", { to: "grok-main", body: "got it", kind: "ack" })) as unknown as {
+      woke: string[];
+      wake_held: { agent: string; reason: string }[];
+    };
+    await bus.flush();
+
+    expect(stub.calls).toHaveLength(0);
+    expect(sent.woke).toEqual([]);
+    expect(sent.wake_held).toMatchObject([{ agent: "grok-main", reason: "quiet_kind" }]);
+    expect(bus.db.query(`SELECT COUNT(*) AS n FROM messages`).get()).toEqual({ n: 1 });
+    bus.close();
+  });
+
+  test("past the daily wake budget a message is stored, held and reported to the sender", async () => {
+    stub = stubFetch();
+    const bus = makeBus({ WAKE_DAILY_CAP: "2" });
+    const a = await bus.mint("a");
+    await bus.mint("grok-main", { kind: "grok", wake_url: "https://hooks.example.com/grok" });
+    const nextWindow = () =>
+      bus.db.query(`UPDATE agents SET last_wake_at = ? WHERE name = 'grok-main'`).run(Date.now() - 61_000);
+
+    for (let i = 0; i < 2; i++) {
+      await tool(bus, a, "send", { to: "grok-main", body: `job ${i}` });
+      await bus.flush();
+      nextWindow();
+    }
+    expect(stub.calls).toHaveLength(2);
+
+    const held = (await tool(bus, a, "send", { to: "grok-main", body: "one too many" })) as unknown as {
+      woke: string[];
+      wake_held: { agent: string; reason: string; note: string }[];
+    };
+    await bus.flush();
+    expect(stub.calls).toHaveLength(2);
+    expect(held.woke).toEqual([]);
+    expect(held.wake_held).toMatchObject([{ agent: "grok-main", reason: "daily_cap" }]);
+    expect(held.wake_held[0]!.note).toContain("2 wakes");
+    expect(bus.db.query(`SELECT COUNT(*) AS n FROM messages`).get()).toEqual({ n: 3 });
+
+    // The budget is per calendar day: yesterday's wakes don't count against today.
+    bus.db.query(`UPDATE wake_log SET at = ?`).run(Date.now() - 25 * 3_600_000);
+    nextWindow();
+    await tool(bus, a, "send", { to: "grok-main", body: "next day" });
+    await bus.flush();
+    expect(stub.calls).toHaveLength(3);
+    bus.close();
+  });
+
+  test("kind urgent wakes even when the daily budget is spent", async () => {
+    stub = stubFetch();
+    const bus = makeBus({ WAKE_DAILY_CAP: "1" });
+    const a = await bus.mint("a");
+    await bus.mint("grok-main", { kind: "grok", wake_url: "https://hooks.example.com/grok" });
+
+    await tool(bus, a, "send", { to: "grok-main", body: "the one allowed wake" });
+    await bus.flush();
+    bus.db.query(`UPDATE agents SET last_wake_at = ? WHERE name = 'grok-main'`).run(Date.now() - 61_000);
+
+    const sent = (await tool(bus, a, "send", { to: "grok-main", body: "cannot wait", kind: "urgent" })) as unknown as {
+      woke: string[];
+      wake_held?: unknown;
+    };
+    await bus.flush();
+    expect(stub.calls).toHaveLength(2);
+    expect(sent.woke).toEqual(["grok-main"]);
+    expect(sent.wake_held).toBeUndefined();
+    bus.close();
+  });
+
   test("wake_url and wake_key are never returned to callers", async () => {
     stub = stubFetch();
     const bus = makeBus();

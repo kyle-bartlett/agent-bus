@@ -42,6 +42,8 @@ export interface Env {
   /** Admin bearer for identity minting. Set with `wrangler secret put ADMIN_TOKEN`. */
   ADMIN_TOKEN?: string;
   WAKE_DEBOUNCE_MS?: string;
+  /** Wakes one webhook agent may get per day (midnight to midnight Central). Default 20; 0 turns the budget off. */
+  WAKE_DAILY_CAP?: string;
   ASK_POLL_MS?: string;
   RATE_LIMIT_PER_MIN?: string;
   SERVICE_VERSION?: string;
